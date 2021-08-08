@@ -3,19 +3,9 @@
 #include <queue>
 #include <bitset>
 #include <string>
+#include <unordered_map>
 
 #define BITS_PER_BYTE 8
-
-class basic_node {
-    public:
-        char c;
-        int freq;
-
-        basic_node(char ch, int f) {
-            c = ch;
-            freq = f;
-        }
-};
 
 class node {
     public:
@@ -23,7 +13,6 @@ class node {
         int freq;
         node* left;
         node* right;
-        std::string s;
 
         node() {
             left = right = NULL;
@@ -42,113 +31,83 @@ class node {
             right = r;
         }
 
-        node(basic_node n) {
-            c = n.c;
-            freq = n.freq;
-            left = right = NULL;
+        bool operator > (const node n) const {
+            return freq > n.freq;
         }
 };
 
-bool operator<(node const &a, node const &b) {
-        return a.freq > b.freq;
-}
+std::priority_queue<node, std::vector<node>, std::greater<node>> getFreq(std::ifstream &file) {
+    std::unordered_map<char, int> freq;
+    std::priority_queue<node, std::vector<node>, std::greater<node>> freqMaxHeap;
 
-struct code {
     char c;
-    std::string s;
-};
-
-std::priority_queue<node> getFreq(std::ifstream &file) {
-    char c;
-    int count = 0;
-    std::vector<basic_node> freq;
-    std::priority_queue<node> q;
     file >> std::noskipws;
-    while (file >> c) {
-        ++count;
-        auto a = std::find_if(freq.begin(), freq.end(), [&c](const node x){return x.c == c;});
-        if (a != freq.end()) ++(a->freq);
-        else {
-            basic_node n(c, 1);
-            freq.push_back(n);
-        }
-    }
+    while (file >> c) ++(freq[c]);
 
-    for (auto a: freq) q.push(a);
+    for (auto x : freq) freqMaxHeap.push(node(x.first, x.second));
 
-    std::vector<basic_node>().swap(freq);
-
-    return q;
+    return freqMaxHeap;
 }
 
-void huffmanTree(std::priority_queue<node> *q) {
-    while ((*q).size() != 1) {
-        node* m = new node;
-        *m = (*q).top();
-        (*q).pop();
-        node* n = new node;
-        *n = (*q).top();
-        (*q).pop();
-        node* o = new node('\0', (*m).freq+(*n).freq, m, n);
-        (*q).push(*o);
-    }
-}
+// node generateHuffmanTree(std::priority_queue<node, std::vector<node>, decltype(comp)> *freqMaxHeap) {
+//     while (freqMaxHeap->size() != 1) {
+//         node* m = new node;
+//         *m = freqMaxHeap->top();
+//         freqMaxHeap->pop();
+//         node* n = new node;
+//         *n = freqMaxHeap->top();
+//         freqMaxHeap->pop();
+//         node* o = new node('\0', (*m).freq+(*n).freq, m, n);
+//         freqMaxHeap->push(*o);
+//     }
 
-void assign(const node* m, std::vector<code>* dict) {
-    if (m == NULL) return;
+//     return freqMaxHeap->top();
+// }
 
-    if ((*m).left != NULL) (*m).left->s = (*m).s + "0";
-    assign((*m).left, dict);
+// void assign(const node* m, std::unordered_map<char, std::string>& dict, std::string code) {
+//     if (!m) return;
+//     if (!m->left && !m->right) dict[m->c] = code;
+//     if (m->left) assign(m->left, dict, code+"0");
+//     if (m->right) assign(m->right, dict, code+"1");
+// }
 
-    if ((*m).left == NULL && (*m).right == NULL) {
-        code c = {(*m).c, (*m).s};
-        dict->push_back(c);
-    }
-        
-    if ((*m).right != NULL) (*m).right->s = (*m).s + "1";
-    assign((*m).right, dict);
-}
+// void encode(std::ifstream &fin, std::ofstream &fout, std::unordered_map<char, std::string>& dict) {
+//     char c;
+//     fin >> std::noskipws;
+//     std::string s, sub = "";
 
-void encode(std::ifstream &fin, std::ofstream &fout, std::vector<code> dict) {
-    char c;
-    fin >> std::noskipws;
-    std::string s, sub = "";
+//     fout << " ";
+//     for (auto x : dict) fout << x.first << x.second << " ";
+//     fout << ">>";
 
-    fout << " ";
-    for (auto a: dict) {
-        fout << a.c << a.s << " ";
-    }
-    fout << ">>";
+//     while (fin >> c) {
+//         s = dict[c];
+//         int sz = s.length();
+//         int i = 0;
+//         while (i < sz) {
+//             int x = sub.length();                
+//             if (sz - i + x >= BITS_PER_BYTE) {
+//                 sub += s.substr(i, (BITS_PER_BYTE - x));
+//                 i += (BITS_PER_BYTE - x);
+//                 std::bitset<BITS_PER_BYTE> b(sub);
+//                 fout << (char)b.to_ulong();
+//                 sub = "";
+//             }
+//             else {
+//                 sub += s.substr(i);
+//                 i = sz;
+//             }
+//         }
+//     }
+//     if (sub != "") {
+//         std::bitset<BITS_PER_BYTE> b(sub);
+//         b = b << (BITS_PER_BYTE - sub.length());
+//         fout << (char)b.to_ulong();
+//     }
 
-    while (fin >> c) {
-        auto a = std::find_if(dict.begin(), dict.end(), [&c](const code x) {return x.c == c;});
-        s = a->s;
-        int sz = s.length();
-        int i = 0;
-        while (i < sz) {
-            int x = sub.length();                
-            if (sz - i + x >= BITS_PER_BYTE) {
-                sub += s.substr(i, (BITS_PER_BYTE - x));
-                i += (BITS_PER_BYTE - x);
-                std::bitset<BITS_PER_BYTE> b(sub);
-                fout << (char)b.to_ulong();
-                sub = "";
-            }
-            else {
-                sub += s.substr(i);
-                i = sz;
-            }
-        }
-    }
-    if (sub != "") {
-        std::bitset<BITS_PER_BYTE> b(sub);
-        b = b << (BITS_PER_BYTE - sub.length());
-        fout << (char)b.to_ulong();
-    }
-
-    fout.seekp(0, std::ios::beg);
-    fout << (BITS_PER_BYTE - sub.length()) % BITS_PER_BYTE;
-}
+//     fout.seekp(0, std::ios::beg);
+//     fout << (BITS_PER_BYTE - sub.length()) % BITS_PER_BYTE;
+// }
 
 int main () {
     std::string filename;
@@ -171,22 +130,20 @@ int main () {
         exit(-1);
     }
 
-    std::priority_queue<node> q = getFreq(fin);
+    std::priority_queue<node, std::vector<node>, std::greater<node>> freqMaxHeap = getFreq(fin);
 
-    huffmanTree(&q);
+    // node huffmanTree = generateHuffmanTree(&freqMaxHeap);
 
-    std::vector<code> dict;
-    assign(&(q.top()), &dict);
+    // std::unordered_map<char, std::string> dict;
+    // assign(&huffmanTree, dict, "");
 
-    fin.clear();
-    fin.seekg(0, std::ios::beg);
-    std::string outfilename = filename.substr(0, ext_pos) + ".comp";
-    std::ofstream fout(outfilename);
-    encode(fin, fout, dict);
-    fin.close();
-    fout.close();
-
-    std::vector<code>().swap(dict);
+    // fin.clear();
+    // fin.seekg(0, std::ios::beg);
+    // std::string outfilename = filename.substr(0, ext_pos) + ".comp";
+    // std::ofstream fout(outfilename);
+    // encode(fin, fout, dict);
+    // fin.close();
+    // fout.close();
 
     return 0;
 }
