@@ -9,23 +9,19 @@
 
 class node {
     public:
-        char c;
-        int freq;
-        node* left;
-        node* right;
+        char c = '\0';
+        int freq = 0;
+        node* left = NULL;
+        node* right = NULL;
 
-        node() {
-            left = right = NULL;
-        }
+        node() {}
 
         node(char ch, int f) {
             c = ch;
             freq = f;
-            left = right = NULL;
         }
 
-        node(char ch, int f, node* l, node* r) {
-            c = ch;
+        node(int f, node* l, node* r) {
             freq = f;
             left = l;
             right = r;
@@ -36,114 +32,129 @@ class node {
         }
 };
 
-std::priority_queue<node, std::vector<node>, std::greater<node>> getFreq(std::ifstream &file) {
-    std::unordered_map<char, int> freq;
-    std::priority_queue<node, std::vector<node>, std::greater<node>> freqMaxHeap;
-
+std::unordered_map<char, int> generateFreqMap(std::ifstream& file) {
+    std::unordered_map<char, int> freqMap;
     char c;
-    file >> std::noskipws;
-    while (file >> c) ++(freq[c]);
+    while (file.get(c)) ++(freqMap[c]);
+    freqMap[EOF] = 1;
 
-    for (auto x : freq) freqMaxHeap.push(node(x.first, x.second));
-
-    return freqMaxHeap;
+    return freqMap;
 }
 
-// node generateHuffmanTree(std::priority_queue<node, std::vector<node>, decltype(comp)> *freqMaxHeap) {
-//     while (freqMaxHeap->size() != 1) {
-//         node* m = new node;
-//         *m = freqMaxHeap->top();
-//         freqMaxHeap->pop();
-//         node* n = new node;
-//         *n = freqMaxHeap->top();
-//         freqMaxHeap->pop();
-//         node* o = new node('\0', (*m).freq+(*n).freq, m, n);
-//         freqMaxHeap->push(*o);
-//     }
+void assign(const node* m, std::unordered_map<char, std::string>& dict, std::string code) {
+    if (!m) return;
+    if (m->left) assign(m->left, dict, code+"0");
+    if (m->right) assign(m->right, dict, code+"1");
+    if (!m->left && !m->right) dict[m->c] = code;
+}
 
-//     return freqMaxHeap->top();
-// }
+std::vector<char> treeToVector(node* m) {
+    std::queue<node*> toVisit;
+    toVisit.push(m);
 
-// void assign(const node* m, std::unordered_map<char, std::string>& dict, std::string code) {
-//     if (!m) return;
-//     if (!m->left && !m->right) dict[m->c] = code;
-//     if (m->left) assign(m->left, dict, code+"0");
-//     if (m->right) assign(m->right, dict, code+"1");
-// }
+    std::vector<char> vectorizedTree;
+    while (!toVisit.empty()) {
+        node* temp = toVisit.front();
+        if (temp->left) toVisit.push(temp->left);
+        if (temp->right) toVisit.push(temp->right);
+        toVisit.pop();
+        char c = temp->c;
+        vectorizedTree.push_back(c);
+    }
 
-// void encode(std::ifstream &fin, std::ofstream &fout, std::unordered_map<char, std::string>& dict) {
-//     char c;
-//     fin >> std::noskipws;
-//     std::string s, sub = "";
+    return vectorizedTree;
+}
 
-//     fout << " ";
-//     for (auto x : dict) fout << x.first << x.second << " ";
-//     fout << ">>";
+std::pair<std::unordered_map<char, std::string>, std::vector<char>> generateHuffmanTree(std::unordered_map<char, int> freqMap) {
+    std::priority_queue<node, std::vector<node>, std::greater<node>> freqMinHeap;
+    for (auto x : freqMap) freqMinHeap.push(node(x.first, x.second));
 
-//     while (fin >> c) {
-//         s = dict[c];
-//         int sz = s.length();
-//         int i = 0;
-//         while (i < sz) {
-//             int x = sub.length();                
-//             if (sz - i + x >= BITS_PER_BYTE) {
-//                 sub += s.substr(i, (BITS_PER_BYTE - x));
-//                 i += (BITS_PER_BYTE - x);
-//                 std::bitset<BITS_PER_BYTE> b(sub);
-//                 fout << (char)b.to_ulong();
-//                 sub = "";
-//             }
-//             else {
-//                 sub += s.substr(i);
-//                 i = sz;
-//             }
-//         }
-//     }
-//     if (sub != "") {
-//         std::bitset<BITS_PER_BYTE> b(sub);
-//         b = b << (BITS_PER_BYTE - sub.length());
-//         fout << (char)b.to_ulong();
-//     }
+    while (freqMinHeap.size() != 1) {
+        node* m = new node;
+        *m = freqMinHeap.top();
+        freqMinHeap.pop();
+        node* n = new node;
+        *n = freqMinHeap.top();
+        freqMinHeap.pop();
+        node* o = new node((*m).freq+(*n).freq, m, n);
+        freqMinHeap.push(*o);
+    }
 
-//     fout.seekp(0, std::ios::beg);
-//     fout << (BITS_PER_BYTE - sub.length()) % BITS_PER_BYTE;
-// }
+    std::pair<std::unordered_map<char, std::string>, std::vector<char>> huffmanTree;
+    node* root = new node;
+    *root = freqMinHeap.top();
+    assign(root, huffmanTree.first, "");
+    huffmanTree.second = treeToVector(root);
+
+    return huffmanTree;
+}
+
+void encode(std::ifstream& fin, std::pair<std::unordered_map<char, std::string>, std::vector<char>> huffmanTree, std::ofstream& fout, std::string ext) {
+    fout << ext << " ";
+
+    std::vector<char> HTvector = huffmanTree.second;
+    fout << HTvector.size() << " ";
+    for (auto x : HTvector) fout.put(x);
+
+    char c;
+    std::string s, sub = "";
+    std::unordered_map<char, std::string> HTdict = huffmanTree.first;
+    while (fin.get(c)) {
+        s = HTdict[c];
+        if (fin.peek() == EOF) s += HTdict[EOF];
+        int sz = s.length();
+        for (int i = 0; i < sz; ) {
+            int x = sub.length();
+            if (sz - i + x >= BITS_PER_BYTE) {
+                sub += s.substr(i, (BITS_PER_BYTE - x));
+                i += (BITS_PER_BYTE - x);
+                std::bitset<BITS_PER_BYTE> b(sub);
+                fout.put(b.to_ulong());
+                sub = "";
+            }
+            else {
+                sub += s.substr(i);
+                i = sz;
+            }
+        }
+    }
+    if (sub != "") {
+        std::bitset<BITS_PER_BYTE> b(sub);
+        b = b << (BITS_PER_BYTE - sub.length());
+        fout.put(b.to_ulong());
+    }
+}
+
+bool compress(std::string filename) {
+    std::string ext = filename.substr(filename.find_last_of('.'));
+    if (ext != ".txt") return false;
+
+    std::ifstream fin(filename);
+    if (!fin) return false;
+    
+    if (fin.peek() == EOF) return false;
+
+    std::unordered_map<char, int> freqMap = generateFreqMap(fin);
+    std::pair<std::unordered_map<char, std::string>, std::vector<char>> huffmanTree = generateHuffmanTree(freqMap);
+
+    std::ofstream fout(filename + ".cmp", std::ios::binary);
+
+    fin.clear();
+    fin.seekg(0, std::ios::beg);
+    encode(fin, huffmanTree, fout, ext);
+
+    fin.close();
+    fout.close();
+
+    return true;
+}
 
 int main () {
     std::string filename;
-    std::cout << "Filename: ";
+    std::cout << "Enter filename of the .txt file to be compressed: ";
     std::getline(std::cin, filename);
 
-    auto ext_pos = filename.find_last_of('.');
-    std::string ext = filename.substr(ext_pos);
-    if (ext != ".txt") {
-        std::cerr << "Not a .txt file" << std::endl;
-        exit(-1);
-    }
-    std::ifstream fin(filename);
-    if (!fin) {
-        std::cerr << "Error opening file" << std::endl;
-        exit(-1);
-    }
-    if (fin.peek() == EOF) {
-        std::cerr << "Empty file" << std::endl;
-        exit(-1);
-    }
-
-    std::priority_queue<node, std::vector<node>, std::greater<node>> freqMaxHeap = getFreq(fin);
-
-    // node huffmanTree = generateHuffmanTree(&freqMaxHeap);
-
-    // std::unordered_map<char, std::string> dict;
-    // assign(&huffmanTree, dict, "");
-
-    // fin.clear();
-    // fin.seekg(0, std::ios::beg);
-    // std::string outfilename = filename.substr(0, ext_pos) + ".comp";
-    // std::ofstream fout(outfilename);
-    // encode(fin, fout, dict);
-    // fin.close();
-    // fout.close();
+    if(!compress(filename)) std::cout << "Failed to compress" << std::endl;
 
     return 0;
 }

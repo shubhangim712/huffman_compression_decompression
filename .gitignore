@@ -1,0 +1,12 @@
+
+.vscode/launch.json
+compression.exe
+compression.ilk
+compression.obj
+compression.pdb
+vc140.pdb
+decompression.exe
+decompression.ilk
+decompression.pdb
+.vscode/c_cpp_properties.json
+.vscode/settings.json

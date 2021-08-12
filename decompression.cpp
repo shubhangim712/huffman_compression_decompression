@@ -6,77 +6,116 @@
 
 #define BITS_PER_BYTE 8
 
-struct code {
-    char c;
-    std::string s;
+class node {
+    public:
+        char c = '\0';
+        node* left = NULL;
+        node* right = NULL;
+
+        node(char c) {
+            this->c = c;
+        }
 };
 
-void decode(std::ifstream &fin, std::ofstream &fout) {
-    char c;
+std::string getExt(std::filebuf& fin) {
+    std::string ext = "";
+    for(char c = fin.sbumpc(); c != ' '; c = fin.sbumpc()) ext += c;
+    return ext;
+}
 
-    fin >> std::noskipws;
+std::vector<char> extractHTvector(std::filebuf& fin) {
+    std::string num = "";
+    for(char c = fin.sbumpc(); c != ' '; c = fin.sbumpc()) num += c;
+    int n = stoi(num);
 
-    fin >> c;
-    int trail = (int)c - '0';
+    std::vector<char> v(n);
+    for (int i = 0; i < n; ++i) v[i] = fin.sbumpc();
 
-    std::vector<code> v;
-    while (fin >> c) {
-        if (c == '>' && fin.peek() == '>') break;
-        code x;
-        x.s = "";
-        x.c = c;
-        while (fin >> c && c != ' ') x.s += c;
-        v.push_back(x);
+    return v;
+}
+
+node* generateHuffmanTree(std::vector<char> HTvector) {
+    int n = HTvector.size();
+    node* root = new node(HTvector[0]);
+    if (n == 1) return root;
+
+    int i = 1;
+    std::queue<node*> parent;
+    parent.push(root);
+
+    while (i < n) {
+        node* temp = parent.front();
+        parent.pop();
+        node* l = new node(HTvector[i]);
+        temp->left = l;
+        if (HTvector[i++] == '\0') parent.push(l);
+        node* r = new node(HTvector[i]);
+        temp->right = r;
+        if (HTvector[i++] == '\0') parent.push(r);
     }
 
-    std::string s = "";
-    fin >> c;
-    while (fin >> c) {
-        std::bitset<BITS_PER_BYTE> b(c);
-        std::string y = b.to_string();
+    return root;
+}
 
-        int l = fin.peek() == EOF ? BITS_PER_BYTE - trail : BITS_PER_BYTE;
-        for (int i = 0; i < l; ++i) {
-            s += y[i];
-            auto a = std::find_if(v.begin(), v.end(), [&s](const code x){return x.s==s;});
-            if (a != v.end()) {
-                fout << a->c;
-                s = "";
+node* getHuffmanTree(std::filebuf& fin) {
+    std::vector<char> HTvector = extractHTvector(fin);
+
+    node* huffmanTree = generateHuffmanTree(HTvector);
+
+    return huffmanTree;
+}
+
+void decode(std::filebuf& fin, node* huffmanTree, std::ofstream& fout) {
+    std::string op = "";
+
+    node* it = huffmanTree;
+    bool flag = true;
+
+    while (flag) {
+        std::bitset<BITS_PER_BYTE> b(fin.sbumpc());
+        int i = BITS_PER_BYTE - 1;
+        while (i > -1) {
+            while (it->left && i > -1) it = !b[i--] ? it->left : it->right;
+            if (!it->left) {
+                if (it->c == -1) {
+                    flag = false;
+                    break;
+                }
+                fout << it->c;
+                it = huffmanTree;
             }
-        }      
+        }
     }
-    
-    std::vector<code>().swap(v);
+}
+
+bool decompress(std::string filename) {
+    if (filename.substr(filename.find_last_of('.')) != ".cmp") return false;
+
+    std::filebuf fin;
+    if (!fin.open(filename, std::ios::binary|std::ios::in)) return false;
+
+    if (fin.sgetc() == EOF) return false;
+
+    std::string ext = getExt(fin);
+    node* huffmanTree = getHuffmanTree(fin);
+
+    std::string outfilename = filename + ext;
+    std::ofstream fout(outfilename);
+
+    decode(fin, huffmanTree, fout);
+
+    fin.close();
+    fout.close();
+
+    return true;
 }
 
 int main () {
     std::string filename;
-    std::cout << "File to be decompressed: ";
+    std::cout << "Enter the name of the file to be decompressed: ";
     std::getline(std::cin, filename);
 
-    auto ext_pos = filename.find_last_of('.');
-    std::string ext = filename.substr(ext_pos);
-    if (ext != ".comp") {
-        std::cerr << "Not a .comp file" << std::endl;
-        exit(-1);
-    }
-    std::ifstream fin(filename);
-    if (!fin) {
-        std::cerr << "Error opening file" << std::endl;
-        exit(-1);
-    }
-    if (fin.peek() == EOF) {
-        std::cerr << "Empty file" << std::endl;
-        exit(-1);
-    }
-
-    std::string outfilename = filename.substr(0, ext_pos) + ".txt";
-    std::ofstream fout(outfilename);
-
-    decode(fin, fout);
-
-    fin.close();
-    fout.close();
+    if(!decompress(filename)) std::cout << "Failed to decompress" << std::endl;
 
     return 0;
 }
